@@ -1,39 +1,88 @@
 library(dplyr)
 
-# get the data
+# get the Google Trends data and calculate the FOIs
 
-trendsData<-read.csv("report.csv",skip=4,nrows=595,stringsAsFactors=FALSE )
+allFileNames<-list.files("Trends")
+allFOIs<-NULL
 
-# look at it
+for(fileName in allFileNames){
 
-head(trendsData)
-tail(trendsData)
-str(trendsData)
+        #fullFileName<-"./Trends/AR.csv"
 
-# extract year from Week column and store as numeric
+        fullFileName<-paste0("./Trends/",fileName)
+        trendsData<-read.csv(fullFileName,skip=4,nrows=476-5,stringsAsFactors=FALSE )
 
-trendsData$year <- substring(trendsData$Week, first=1, last=4)
-trendsData$year <- as.numeric(trendsData$year)
-
-summary(trendsData)
-
-# create 2012 subset
-
-AllFOIs<-NULL
-for(thisyear in min(trendsData$year)+1:max(trendsData$year)-1){
+        #head(trendsData)
+        #tail(trendsData)
+        #str(trendsData)
         
-        trendsDatathisyear<-filter(trendsData,year==thisyear)
-        XNextYear<-paste("X",thisyear+1)
-        XLastYear<-paste("X",thisyear-1)
-        FOI<-sum(trendsDatathisyear$XNextYear) / sum(trendsDatathisyear$XLastYear)
+        # extract year from Week column and store as numeric
         
-        AllFOIs<-c(AllFOIs,FOI)
+        trendsData$year <- substring(trendsData$Week, first=1, last=4)
+        trendsData$year <- as.numeric(trendsData$year)
+        
+        # summary(trendsData)
+        
+        # create 2012 subset
+        
+        trendsData2012<-filter(trendsData,year==2012)
+        
+        foi<-sum(trendsData2012$X2013) / sum(trendsData2012$X2011)
+        
+        country<-substring(fileName,first=1,last=2)
+        
+        
+        foirow<-data.frame(Country=country,FOI=foi)
+                
+        allFOIs<-rbind(allFOIs,foirow)
 }
 
-AllFOIs
+allFOIs #ddd
 
+# gwt GDPS
 
-# calculate FOI for 2012
+gdpPerCap <- read.csv("rawdata_2004.txt",
+                      sep="\t",    # columns are separated with tabs
+                      header=F,    # no column names are given,
+                      row.names=1, # row names (numbers) are in the 1st column.
+                      stringsAsFactors=FALSE) 
+head(gdpPerCap)
 
+# tidy the gdp data
+names(gdpPerCap)<-c("Country","GDP_PC")
+head(gdpPerCap)
+str(gdpPerCap)
 
-FOI2012
+# remove the $s from the GDP column
+
+gdpPerCap$GDP_PC<-gsub("\\$","",gdpPerCap$GDP_PC)
+#gdpPerCap$GDP_PC <- substring(gdpPerCap$GDP_PC, first=2) # does the same thing
+gdpPerCap$GDP_PC<-gsub(",","",gdpPerCap$GDP_PC)
+
+# combine GDP and FOI data.
+
+gdpPerCap$GDP_PC<-as.numeric(gdpPerCap$GDP_PC)
+head(gdpPerCap)
+
+# replace country names with codes
+library(countrycode)
+
+gdpPerCap$Country <- countrycode(gdpPerCap$Country,  # change this data
+                                 origin="country.name",  # from a name
+                                 destination="iso2c")    # to a 2-char code
+
+# merge FOI and GDP data
+
+foiGDP <- merge(allFOIs, gdpPerCap)
+
+head(foiGDP)
+
+# plot GDP vs FOI
+
+library(ggplot2)
+
+ggplot(data=foiGDP, aes(x=FOI ,y=GDP_PC)) + geom_point() 
+        
+# check for correlation
+cor.test(foiGDP$FOI, foiGDP$GDP_PC)
+             # Plot each of the points
